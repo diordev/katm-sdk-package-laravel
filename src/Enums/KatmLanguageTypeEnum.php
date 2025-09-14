@@ -2,7 +2,7 @@
 
 namespace Katm\KatmSdk\Enums;
 
-enum KatmLanguageEnum: string
+enum KatmLanguageTypeEnum: string
 {
     case Uzbek = 'uz';
     case Russia = 'ru';

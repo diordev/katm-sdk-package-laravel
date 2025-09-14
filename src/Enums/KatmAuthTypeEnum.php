@@ -2,7 +2,7 @@
 
 namespace Katm\KatmSdk\Enums;
 
-enum KatmAuthEnum: string
+enum KatmAuthTypeEnum: string
 {
     case AuthNone = 'none';
     case AuthBasic = 'basic';
