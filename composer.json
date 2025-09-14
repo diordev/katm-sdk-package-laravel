@@ -45,5 +45,6 @@
       "email": "diordev9@gmail.com"
     }
   ],
+  "minimum-stability": "stable",
   "prefer-stable": true
 }
