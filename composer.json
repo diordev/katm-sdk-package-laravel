@@ -1,6 +1,5 @@
 {
   "name": "katm/katm-sdk-laravel",
-  "version": "0.1.0",
   "description": "Comprehensive Laravel SDK for the KATM Service API.",
   "type": "library",
   "license": "MIT",
