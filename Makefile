@@ -18,4 +18,4 @@ git-tag:
 	git tag
 
 git-dev:
-	git add . && git commit -m "Finished feature X before release"
+	git add . && git commit -m "Finished feature X before release" && git push origin dev-main
