@@ -4,31 +4,50 @@ namespace Katm\KatmSdk\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use Katm\KatmSdk\Services\Auth\KatmAuthService;
-use Katm\KatmSdk\Services\Auth\KatmInitClientService;
 use Katm\KatmSdk\Services\Credit\KatmCreditService;
 use Katm\KatmSdk\Services\KatmManagerService;
-use Katm\KatmSdk\Services\Report\KatmReportService;
 
+/**
+ * Class KatmSdkServiceProvider
+ *
+ * Laravel ilovasi uchun KATM SDK paketini ro‘yxatdan o‘tkazuvchi service provider.
+ *
+ * Ushbu provider quyidagi ishlarni bajaradi:
+ * - Konfiguratsiya faylini birlashtiradi (`config/katm.php`)
+ * - `KatmManagerService` singleton sifatida konteynerga bog‘lanadi
+ * - Konfiguratsiyani `vendor:publish` orqali chop etish imkonini beradi
+ */
 class KatmSdkServiceProvider extends ServiceProvider
 {
+    /**
+     * SDK xizmatlarini Laravel konteyneriga ro‘yxatdan o‘tkazadi.
+     * `KatmManagerService` singleton sifatida bog‘lanadi.
+     */
     public function register(): void
     {
-        $this->mergeConfigFrom(__DIR__.'/../../config/katm.php', 'katm');
+        // Konfiguratsiyani birlashtirish
+        $this->mergeConfigFrom(
+            __DIR__.'/../../config/katm.php',
+            'katm'
+        );
 
-        // Manager singleton
-        $this->app->singleton('katm.manager', function ($app) {
+        // KATM SDK boshqaruvchi servisni singleton sifatida ro‘yxatga olish
+        $this->app->singleton(KatmManagerService::class, function ($app) {
             return new KatmManagerService(
                 $app->make(KatmAuthService::class),
-                $app->make(KatmInitClientService::class),
                 $app->make(KatmCreditService::class),
-                $app->make(KatmReportService::class),
             );
         });
     }
 
+    /**
+     * SDK konfiguratsiyasini publish qilish imkonini beradi.
+     *
+     * `php artisan vendor:publish --tag=katm-config`
+     */
     public function boot(): void
     {
-        // Publish config
+        // Konfiguratsiyani chop etish
         $this->publishes([
             __DIR__.'/../../config/katm.php' => config_path('katm.php'),
         ], 'katm-config');

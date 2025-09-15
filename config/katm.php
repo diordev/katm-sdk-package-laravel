@@ -8,22 +8,22 @@ return [
     |--------------------------------------------------------------------------
     | API server uchun bazaviy manzil.
     */
-    'base_url' => env('KATM_BASE_URL'),
+    'base_url' => env('KATM_BASE_URL', 'http://localhost'),
 
     /*
     |--------------------------------------------------------------------------
     | Basic Auth (ixtiyoriy)
     |--------------------------------------------------------------------------
     */
-    'username' => env('KATM_USERNAME'),
-    'password' => env('KATM_PASSWORD'),
+    'username' => env('KATM_USERNAME', 'admin'),
+    'password' => env('KATM_PASSWORD', 'secret123'),
 
     /*
     |--------------------------------------------------------------------------
     | Token TTL (ixtiyoriy, sekundlarda)
     |--------------------------------------------------------------------------
     */
-    'token_ttl' => env('KATM_TOKEN_TTL'),
+    'token_ttl' => env('KATM_TOKEN_TTL', 240),
 
     /*
     |--------------------------------------------------------------------------
@@ -47,6 +47,20 @@ return [
     'connect_timeout' => env('HTTP_CONNECT_TIMEOUT', 5),
 
     /*
+   |--------------------------------------------------------------------------
+   | Retry sozlamalari
+   |--------------------------------------------------------------------------
+   | tries    - necha marta qayta urinish
+   | sleep_ms - urinishlar orasida kutish (millisekund)
+   | when     - qaysi HTTP status kodlarda qayta urinish
+   */
+    'retry' => [
+        'tries' => env('HTTP_RETRY_TRIES', 2),
+        'sleep_ms' => env('HTTP_RETRY_SLEEP_MS', 300),
+        'when' => [429, 500, 502, 503, 504],
+    ],
+
+    /*
     |--------------------------------------------------------------------------
     | Default headerlar
     |--------------------------------------------------------------------------
@@ -64,20 +78,6 @@ return [
     | Har bir so‘rov bilan X-Request-ID yuboriladigan umumiy headerlar.
     */
     'add_request_id' => env('HTTP_ADD_REQUEST_ID', false),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Retry sozlamalari
-    |--------------------------------------------------------------------------
-    | tries    - necha marta qayta urinish
-    | sleep_ms - urinishlar orasida kutish (millisekund)
-    | when     - qaysi HTTP status kodlarda qayta urinish
-    */
-    'retry' => [
-        'tries' => env('HTTP_RETRY_TRIES', 2),
-        'sleep_ms' => env('HTTP_RETRY_SLEEP_MS', 300),
-        'when' => [429, 500, 502, 503, 504],
-    ],
 
     /*
     |--------------------------------------------------------------------------

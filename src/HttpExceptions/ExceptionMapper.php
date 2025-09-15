@@ -34,68 +34,116 @@ use Katm\KatmSdk\HttpExceptions\Server\ServiceUnavailableException;
  * 3. ensureSuccess(array $json, int $status):
  *    - HTTP 200 OK kelgan bo‘lsa ham, javob body ichida
  *      `success=false` bo‘lsa, KatmApiException tashlaydi.
- *      Bu biznes-darajadagi xatolarni bildiradi.
- *
- * Shu tarzda ExceptionMapper yordamida:
- * - Transport xatolari
- * - HTTP status xatolari
- * - Biznes xatolar
- * yagona markaziy qatlamda boshqariladi va SDK foydalanuvchisi
- * xatolarning qaysi turdan kelib chiqqanini aniq bilib oladi.
  */
-final class ExceptionMapper
+final readonly class ExceptionMapper
 {
-    /** Response statusga qarab maxsus exception tashlaydi */
-    public static function fromResponse(Response $res): never
+    /**
+     * HTTP javob statusiga qarab mos `HttpException` tashlaydi.
+     *
+     * 4xx va 5xx xatoliklar uchun quyidagi exceptionlar:
+     * - 400: BadRequestException
+     * - 401: UnauthorizedException
+     * - 403: ForbiddenException
+     * - 404: NotFoundException
+     * - 422: UnprocessableEntityException
+     * - 429: TooManyRequestsException
+     * - 500: ServerErrorException
+     * - 502/503/504: ServiceUnavailableException
+     *
+     * @param  Response  $res  Laravel HTTP javobi
+     *
+     * @throws KatmHttpException
+     */
+    public static function fromResponse(Response $res): KatmHttpException
     {
         $status = $res->status();
-        $payload = self::shortBody($res);
-        $msg = self::buildMessage($status, $payload);
+        $body = $res->json() ?? [];
+        $error = is_array($body['error'] ?? null) ? $body['error'] : [];
+        $errId = isset($error['errId']) ? (int) $error['errId'] : null;
+        $friendly = isset($error['isFriendly']) ? (bool) $error['isFriendly'] : null;
+        $errMsg = $error['errMsg'] ?? ($body['message'] ?? null);
 
-        switch ($status) {
-            case 400: throw new BadRequestException($msg, 400);
-            case 401: throw new UnauthorizedException($msg, 401);
-            case 403: throw new ForbiddenException($msg, 403);
-            case 404: throw new NotFoundException($msg, 404);
-            case 422: throw new UnprocessableEntityException($msg, 422);
-            case 429: throw new TooManyRequestsException($msg, 429);
-            case 500: throw new ServerErrorException($msg, 500);
-            case 502:
-            case 503:
-            case 504:
-                throw new ServiceUnavailableException($msg, $status);
-            default:
-                // noma’lum status – bazaviy exception
-                throw new KatmHttpException($msg, $status);
-        }
+        // Xabar: errMsg bo'lsa shuni afzal ko'ramiz
+        $msg = sprintf('HTTP %d: %s', $status, $errMsg ? (string) $errMsg : json_encode($body, JSON_UNESCAPED_UNICODE));
+
+        $args = [$msg, $status, null, $errId, $friendly, $errMsg];
+
+        // Statusga mos exception
+        return match ($status) {
+            400 => new BadRequestException(...$args),
+            401 => new UnauthorizedException(...$args),
+            403 => new ForbiddenException(...$args),
+            404 => new NotFoundException(...$args),
+            422 => new UnprocessableEntityException(...$args),
+            429 => new TooManyRequestsException(...$args),
+            500 => new ServerErrorException(...$args),
+            502, 503, 504 => new ServiceUnavailableException(...$args),
+            default => new KatmHttpException(...$args),
+        };
     }
 
+    /**
+     * API javob JSON strukturasi ichidagi `success: false` holatini aniqlaydi
+     * va agar mavjud bo‘lsa, KatmApiException otadi.
+     *
+     * Bu metod 200 OK holatida ham biznes xatoliklarni aniqlash uchun ishlatiladi.
+     *
+     * @param  array  $json  JSON response body
+     * @param  int  $status  HTTP status kodi (default 200)
+     *
+     * @throws KatmApiException
+     */
     public static function ensureSuccess(array $json, int $status = 200): void
     {
-        $ok = $json['success'] ?? null;
-        if ($ok === true) {
+        if (($json['success'] ?? null) === true) {
             return;
         }
 
-        $msg = (string) ($json['error']['errMsg'] ?? $json['message'] ?? 'Operation failed.');
-        $code = (int) ($json['error']['code'] ?? $json['code'] ?? $status);
+        $error = is_array($json['error'] ?? null) ? $json['error'] : [];
+        $errId = isset($error['errId']) ? (int) $error['errId'] : null;
+        $friendly = isset($error['isFriendly']) ? (bool) $error['isFriendly'] : null;
+        $errMsg = $error['errMsg'] ?? ($json['message'] ?? 'Operation failed.');
 
-        throw new KatmApiException($msg, $code);
+        throw new KatmApiException(
+            message: $errMsg,
+            code: $errId ?? $status,
+            errId: $errId,
+            isFriendly: $friendly,
+            errMsg: $errMsg,
+        );
     }
 
-    /** Transport-level xatolarni normalizatsiya qilish */
-    public static function fromTransport(\Throwable $e): never
+    /**
+     * Transport-level exception (`Throwable`)ni aniqlaydi va mos custom exception'ga map qiladi.
+     *
+     * - Agar ConnectionException bo‘lsa → ServiceUnavailableException tashlanadi
+     * - Agar RequestException bo‘lsa → `fromResponse()` orqali mos statusga qarab exception tashlanadi
+     * - Aks holda, original exception tashlanadi
+     *
+     * @param  \Throwable  $e  Laravel HTTP yoki transport-level xatolik
+     *
+     * @throws KatmHttpException|\Throwable
+     */
+    public static function fromTransport(\Throwable $e): \Throwable
     {
         if ($e instanceof ConnectionException) {
-            throw new ServiceUnavailableException('Connection failed or timeout (connect/read).', 0, $e);
+            return new ServiceUnavailableException('Connection failed or timeout (connect/read).', 0, $e);
         }
+
         if ($e instanceof RequestException && $e->response) {
-            self::fromResponse($e->response); // never
+            return self::fromResponse($e->response);
         }
-        // boshqa xatolar – aynan o‘zini yuboramiz
-        throw $e;
+
+        return $e;
     }
 
+    /**
+     * Berilgan HTTP status va JSON body asosida qisqa xatolik xabari tuzadi.
+     *
+     * @param  int  $status  HTTP status code
+     * @param  array  $payload  Response JSON body
+     * @return string Formatlangan xatolik xabari (masalan: "HTTP 400: client not found")
+     */
     private static function buildMessage(int $status, array $payload): string
     {
         $err = $payload['error'] ?? $payload['message'] ?? null;
@@ -104,7 +152,13 @@ final class ExceptionMapper
         return sprintf('HTTP %d: %s', $status, $detail ?? 'Unknown error');
     }
 
-    /** JSON tanani qisqa ko‘rinishda qaytarish */
+    /**
+     * HTTP javob JSON emas bo‘lsa, yoki JSON bo‘lsa ham noto‘g‘ri bo‘lsa,
+     * qisqa versiyasini qaytaradi (debug va log uchun).
+     *
+     * @param  Response  $res  Laravel HTTP response
+     * @return array JSON yoki qisqa body
+     */
     private static function shortBody(Response $res): array
     {
         $json = $res->json();
@@ -113,8 +167,15 @@ final class ExceptionMapper
     }
 
     /**
-     * Retry kerakmi? (transport yoki ma'lum statuslar bo'yicha)
-     * $whenStatuses: [429, 500, 502, 503, 504] va hok.
+     * Retry (qayta yuborish) kerakligini aniqlaydi.
+     *
+     * Quyidagi holatlarda `true`:
+     * - Transport-level xatolik (ConnectionException)
+     * - HTTP status: 429, 500, 502, 503, 504 (yoki berilgan `$whenStatuses` ro‘yxatida bo‘lsa)
+     *
+     * @param  \Throwable  $e  Laravel exception yoki transport xatolik
+     * @param  array<int>  $whenStatuses  Retry ruxsat etilgan HTTP statuslar
+     * @return bool Retry kerak yoki yo‘q
      */
     public static function shouldRetry(\Throwable $e, array $whenStatuses = []): bool
     {

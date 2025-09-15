@@ -3,35 +3,33 @@
 namespace Katm\KatmSdk\HttpExceptions;
 
 /**
- * KatmApiException
+ * Class KatmApiException
  *
- * Ushbu istisno (exception) KATM API’dan HTTP 200 OK javobi kelgan holatlarda,
- * lekin javob body ichida `success=false` bo‘lsa tashlanadi.
+ * API javobining `success: false` bo‘lishi natijasida tashlanadigan biznes-darajadagi xatolik.
  *
- * Ya’ni bu transport yoki HTTP darajadagi xato emas, balki
- * **biznes-darajadagi xato** hisoblanadi.
+ * Bu exception quyidagi holatda yuzaga keladi:
+ * - HTTP javob kodi 200 OK
+ * - Ammo body ichida `success: false` bo‘lib, `error.errMsg` mavjud
  *
- * Misol uchun:
- *  {
- *      "success": false,
- *      "error": {
- *          "errMsg": "Merchant topilmadi",
- *          "code": 101
- *      }
- *  }
+ * Ushbu exception HTTP/transport darajalariga taalluqli emas — bu sof biznes xatolik bo‘lib,
+ * `ExceptionMapper::ensureSuccess()` orqali aniqlanadi va tashlanadi.
  *
- * Bunday vaziyatda ExceptionMapper::ensureSuccess() metodidan foydalaniladi
- * va natijada KatmApiException tashlanadi.
+ * ### Misol javob:
+ * ```json
+ * {
+ *   "success": false,
+ *   "error": {
+ *     "errId": 101,
+ *     "errMsg": "Merchant topilmadi",
+ *     "isFriendly": true
+ *   }
+ * }
+ * ```
  *
- * Foydalanuvchi uchun qulaylik:
- * - Transport-level xatolar (tarmoq, timeout) boshqa exceptionlar bilan ajratiladi.
- * - HTTP-level xatolar (400, 401, 403, 500) alohida exceptionlar bilan ajratiladi.
- * - KatmApiException esa aynan API’dan kelgan biznes xatoni bildiradi.
+ * ### Foydali holatlar:
+ * - API `validation`, `not found`, `permission` yoki boshqa biznes mantiqdagi xatolarni bildirsa
+ * - Transport-level (`ConnectionException`) yoki HTTP-level (`UnauthorizedException`) bilan aralashmasligi kerak
+ *
+ * @see \Katm\KatmSdk\HttpExceptions\ExceptionMapper::ensureSuccess()
  */
-class KatmApiException extends KatmHttpException
-{
-    public function __construct(string $message = 'KATM API error', int $code = 0, ?\Throwable $prev = null)
-    {
-        parent::__construct($message, $code, $prev);
-    }
-}
+class KatmApiException extends KatmHttpException {}
