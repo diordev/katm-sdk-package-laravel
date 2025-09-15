@@ -77,6 +77,11 @@ final class KatmCreditService extends AbstractHttpClientService
                 $res = $send();
             }
         }
+        $res['data']['for_deactication'] = [
+            'url' => 'https://portal.infokredit.uz/ban',
+            'apps' => 'KATM, MyGo'
+        ];
+
 
         return KatmResponseDto::from($res);
     }
