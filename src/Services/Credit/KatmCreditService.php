@@ -50,50 +50,28 @@ final class KatmCreditService extends AbstractHttpClientService
     public function creditBanActive(InitClientRequestDto $dto): KatmResponseDto
     {
 
-        // 1) Avval statusni tekshiramiz
-        try {
-            $statusResp = $this->creditBanStatus($dto);
-        } catch (BadRequestException $e) {
-            if ($this->isClientNotFound($e)) {
-                $this->auth->initClient($dto);
-                $statusResp = $this->creditBanStatus($dto);
-            } else {
-                throw $e;
-            }
-        }
-
-        // 2) Agar allaqachon aktiv bo‘lsa, shu javobni qaytarib qo‘yamiz
+        // 1) Agar allaqachon aktiv bo‘lsa, shu javobni qaytarib qo‘yamiz
         if (($statusResp->data['status'] ?? null) === 1) {
             return $statusResp;
         }
 
-        // 3) Ban qo‘yish
+        // 2) Ban qo‘yish
         $payload = $dto->toCreditBanActiveDto();
-        $send = fn () => $this->post(
+        $res = fn () => $this->post(
             KatmApiEndpointEnum::CreditBanActive->value,
             $payload,
             KatmAuthTypeEnum::AuthBearer->value
         );
 
-        try {
-            $res = $send();
-        } catch (BadRequestException $e) {
-            if ($this->isClientNotFound($e)) {
-                $this->auth->initClient($dto);
-                $res = $send();
-            } else {
-                throw $e;
-            }
-        }
-
         return KatmResponseDto::from($res);
+
     }
 
     /**
      * Kredit ban statusini tekshirish.
      * Cashda Bearer yo‘q bo‘lsa → authenticate() + withBearer()
+     * Client Identifikatsiyadan o'tmagan bo'lsa initClient()
      * Ishlash logikasi:
-     * - Agar `success = false` bo‘lsa → API javobi DTO sifatida qaytariladi
      * - Agar `success = true` bo‘lsa:
      *   - status = 0 → "Запрет не активирован"
      *   - status = 1 → "Запрет активирован"
@@ -108,15 +86,34 @@ final class KatmCreditService extends AbstractHttpClientService
         if (! $this->restoreTokenFromCache()) {
             $this->auth->authenticate();
         }
-        $res = $this->post(
+
+        // 1) Status tekshirish
+        $payload = $dto->toCreditBanStatusDto();
+        $send = fn () => $this->post(
             path: KatmApiEndpointEnum::CreditBanStatus->value,
-            payload: $dto->toCreditBanStatusDto(),
+            payload: $payload,
             auth: KatmAuthTypeEnum::AuthBearer->value
         );
 
-        // 1) Agar success = false → oddiy DTO qaytaramiz
-        if (($res['success'] ?? false) === false) {
-            return KatmResponseDto::from($res);
+        try {
+            $res = $send();
+        } catch (BadRequestException $e) {
+            if ($this->isClientNotFound($e)) {
+                $this->auth->initClient($dto);
+                $res = $send();
+            } else {
+                $data = [
+                    'data' => [$dto->toCreditBanStatusDto()],
+                    'success' => false,
+                    'error' => [
+                        'errId' => $e->errId,
+                        'isFriendly' => $e->isFriendly,
+                        'errMsg' => $e->getMessage(),
+                    ],
+                ];
+
+                return KatmResponseDto::from($data);
+            }
         }
 
         // 2) Agar success = true → status bo‘yicha resultMessage qo‘shamiz

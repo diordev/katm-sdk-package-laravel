@@ -119,8 +119,7 @@ abstract class AbstractHttpClientService
         if ($this->bearer) {
             $jwt_unix_time = (int) ($this->jwtExpOrNull($this->bearer));
             $ttl = $this->calculateTokenTtl($jwt_unix_time);
-
-            Cache::put(self::TOKEN_CACHE_KEY, $this->bearer, now()->addMinutes($ttl));
+            Cache::put(self::TOKEN_CACHE_KEY, $this->bearer, $ttl);
         } else {
             Cache::forget(self::TOKEN_CACHE_KEY);
         }
@@ -387,15 +386,14 @@ abstract class AbstractHttpClientService
      * @param  int  $exp  Unix timestamp (masalan: 1758014793)
      * @return \DateTimeInterface Cache uchun TTL (expiry time)
      */
-    private function calculateTokenTtl(int $exp): \DateTimeInterface
+    private function calculateTokenTtl(int $exp): mixed
     {
         // Configdan safety margin (default: 5 minut)
         $marginSec = (int) ($this->config['token_ttl'] ?? 300);
 
         // exp dan marginni ayrib yuboramiz
-        $finalTs = max(0, $exp - $marginSec);
+        $ttlSeconds = max(0, $exp - time() - $marginSec);
 
-        // Cache uchun DateTime qaytaramiz
-        return \Illuminate\Support\Carbon::createFromTimestamp($finalTs);
+        return $ttlSeconds;
     }
 }
