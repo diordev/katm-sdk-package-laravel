@@ -34,19 +34,27 @@ use Katm\KatmSdk\HttpExceptions\Server\ServiceUnavailableException;
  * 3. ensureSuccess(array $json, int $status):
  *    - HTTP 200 OK kelgan bo‘lsa ham, javob body ichida
  *      `success=false` bo‘lsa, KatmApiException tashlaydi.
- *      Bu biznes-darajadagi xatolarni bildiradi.
- *
- * Shu tarzda ExceptionMapper yordamida:
- * - Transport xatolari
- * - HTTP status xatolari
- * - Biznes xatolar
- * yagona markaziy qatlamda boshqariladi va SDK foydalanuvchisi
- * xatolarning qaysi turdan kelib chiqqanini aniq bilib oladi.
  */
 final readonly class ExceptionMapper
 {
-    /** Response statusga qarab maxsus exception tashlaydi */
-    public static function fromResponse(Response $res): never
+    /**
+     * HTTP javob statusiga qarab mos `HttpException` tashlaydi.
+     *
+     * 4xx va 5xx xatoliklar uchun quyidagi exceptionlar:
+     * - 400: BadRequestException
+     * - 401: UnauthorizedException
+     * - 403: ForbiddenException
+     * - 404: NotFoundException
+     * - 422: UnprocessableEntityException
+     * - 429: TooManyRequestsException
+     * - 500: ServerErrorException
+     * - 502/503/504: ServiceUnavailableException
+     *
+     * @param  Response  $res  Laravel HTTP javobi
+     *
+     * @throws KatmHttpException
+     */
+    public static function fromResponse(Response $res): KatmHttpException
     {
         $status = $res->status();
         $body = $res->json() ?? [];
@@ -61,7 +69,7 @@ final readonly class ExceptionMapper
         $args = [$msg, $status, null, $errId, $friendly, $errMsg];
 
         // Statusga mos exception
-        $ex = match ($status) {
+        return match ($status) {
             400 => new BadRequestException(...$args),
             401 => new UnauthorizedException(...$args),
             403 => new ForbiddenException(...$args),
@@ -72,10 +80,19 @@ final readonly class ExceptionMapper
             502, 503, 504 => new ServiceUnavailableException(...$args),
             default => new KatmHttpException(...$args),
         };
-
-        throw $ex;
     }
 
+    /**
+     * API javob JSON strukturasi ichidagi `success: false` holatini aniqlaydi
+     * va agar mavjud bo‘lsa, KatmApiException otadi.
+     *
+     * Bu metod 200 OK holatida ham biznes xatoliklarni aniqlash uchun ishlatiladi.
+     *
+     * @param  array  $json  JSON response body
+     * @param  int  $status  HTTP status kodi (default 200)
+     *
+     * @throws KatmApiException
+     */
     public static function ensureSuccess(array $json, int $status = 200): void
     {
         if (($json['success'] ?? null) === true) {
@@ -96,20 +113,37 @@ final readonly class ExceptionMapper
         );
     }
 
-    /** Transport-level xatolarni normalizatsiya qilish */
-    public static function fromTransport(\Throwable $e): never
+    /**
+     * Transport-level exception (`Throwable`)ni aniqlaydi va mos custom exception'ga map qiladi.
+     *
+     * - Agar ConnectionException bo‘lsa → ServiceUnavailableException tashlanadi
+     * - Agar RequestException bo‘lsa → `fromResponse()` orqali mos statusga qarab exception tashlanadi
+     * - Aks holda, original exception tashlanadi
+     *
+     * @param  \Throwable  $e  Laravel HTTP yoki transport-level xatolik
+     *
+     * @throws KatmHttpException|\Throwable
+     */
+    public static function fromTransport(\Throwable $e): \Throwable
     {
         if ($e instanceof ConnectionException) {
-            throw new ServiceUnavailableException('Connection failed or timeout (connect/read).', 0, $e);
+            return new ServiceUnavailableException('Connection failed or timeout (connect/read).', 0, $e);
         }
 
         if ($e instanceof RequestException && $e->response) {
-            self::fromResponse($e->response);
+            return self::fromResponse($e->response);
         }
 
-        throw $e;
+        return $e;
     }
 
+    /**
+     * Berilgan HTTP status va JSON body asosida qisqa xatolik xabari tuzadi.
+     *
+     * @param  int  $status  HTTP status code
+     * @param  array  $payload  Response JSON body
+     * @return string Formatlangan xatolik xabari (masalan: "HTTP 400: client not found")
+     */
     private static function buildMessage(int $status, array $payload): string
     {
         $err = $payload['error'] ?? $payload['message'] ?? null;
@@ -118,7 +152,13 @@ final readonly class ExceptionMapper
         return sprintf('HTTP %d: %s', $status, $detail ?? 'Unknown error');
     }
 
-    /** JSON tanani qisqa ko‘rinishda qaytarish */
+    /**
+     * HTTP javob JSON emas bo‘lsa, yoki JSON bo‘lsa ham noto‘g‘ri bo‘lsa,
+     * qisqa versiyasini qaytaradi (debug va log uchun).
+     *
+     * @param  Response  $res  Laravel HTTP response
+     * @return array JSON yoki qisqa body
+     */
     private static function shortBody(Response $res): array
     {
         $json = $res->json();
@@ -127,8 +167,15 @@ final readonly class ExceptionMapper
     }
 
     /**
-     * Retry kerakmi? (transport yoki ma'lum statuslar bo'yicha)
-     * $whenStatuses: [429, 500, 502, 503, 504] va hok.
+     * Retry (qayta yuborish) kerakligini aniqlaydi.
+     *
+     * Quyidagi holatlarda `true`:
+     * - Transport-level xatolik (ConnectionException)
+     * - HTTP status: 429, 500, 502, 503, 504 (yoki berilgan `$whenStatuses` ro‘yxatida bo‘lsa)
+     *
+     * @param  \Throwable  $e  Laravel exception yoki transport xatolik
+     * @param  array<int>  $whenStatuses  Retry ruxsat etilgan HTTP statuslar
+     * @return bool Retry kerak yoki yo‘q
      */
     public static function shouldRetry(\Throwable $e, array $whenStatuses = []): bool
     {

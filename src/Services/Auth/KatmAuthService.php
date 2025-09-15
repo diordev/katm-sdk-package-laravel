@@ -12,10 +12,26 @@ use Katm\KatmSdk\Enums\KatmAuthTypeEnum;
 use Katm\KatmSdk\HttpExceptions\Client\UnauthorizedException;
 use Katm\KatmSdk\Services\AbstractHttpClientService;
 
+/**
+ * KatmAuthService
+ *
+ * KATM API uchun autentifikatsiya va boshlang‘ich client ro‘yxatdan o‘tkazish amallarini bajaradi.
+ *
+ * Ushbu servis quyidagi imkoniyatlarni beradi:
+ * - `/auth/login` endpoint orqali token olish (basic auth bilan)
+ * - `/auth/init-client` orqali foydalanuvchini ro‘yxatga olish
+ * - Bearer tokenni saqlash va qayta foydalanish
+ *
+ * Tokenlar avtomatik ravishda `withBearer()` orqali bazaviy klassga uzatiladi.
+ */
 final class KatmAuthService extends AbstractHttpClientService
 {
     /**
-     * Basic auth bilan token olib, bearer’ni o‘rnatadi.
+     * Foydalanuvchining login va paroli orqali autentifikatsiya qiladi.
+     *
+     * KATM API’dan access token oladi va uni bearer sifatida xotirada saqlaydi.
+     *
+     * @return KatmResponseDto API javobi (token va holat)
      */
     public function authenticate(): KatmResponseDto
     {
@@ -31,42 +47,47 @@ final class KatmAuthService extends AbstractHttpClientService
         );
 
         $data = KatmResponseDto::from($res);
-        // accessToken ni bearer sifatida saqlaymiz
+
+        // Eski accessToken ni olib tashlaymiz
+        $this->withoutBearer();
+
+        // Yangi accessToken ni bearer sifatida saqlaymiz
         $this->withBearer($data->data->accessToken ?? null);
 
         return $data;
     }
 
     /**
-     * Mijozni boshlang‘ich ro‘yxatdan o‘tkazish (bearer bilan).
-     * 401 bo‘lsa avtomatik re-auth qilib, 1 marta qayta urinadi.
+     * Mijozni birinchi marta tizimda ro‘yxatdan o‘tkazadi.
+     *
+     * Ushbu metod /auth/init-client endpointga murojaat qiladi.
+     * - Agar bearer token mavjud bo‘lsa, u bilan yuboriladi.
+     * - Agar 401 (Unauthorized) qaytsa, autentifikatsiya qilinib qayta yuboriladi.
+     *
+     * @param  InitClientRequestDto  $payload  Mijoz haqidagi ma’lumotlar
+     * @return KatmResponseDto API javobi
+     *
+     * @throws UnauthorizedException
      */
     public function initClient(InitClientRequestDto $payload): KatmResponseDto
     {
-
-        $send = fn (string $auth) => $this->post(
+        if (! $this->restoreTokenFromCache()) {
+            $this->authenticate();
+        }
+        $send = fn () => $this->post(
             path: KatmApiEndpointEnum::AuthClient->value,
             payload: $payload->toArray(),
-            auth: $auth
+            auth: KatmAuthTypeEnum::AuthBearer->value
         );
 
-        $firstAuth = ($this->bearer ?? '') === ''
-            ? KatmAuthTypeEnum::AuthNone->value
-            : KatmAuthTypeEnum::AuthBearer->value;
-
         try {
-            $res = $send($firstAuth);
+            $res = $send();
         } catch (UnauthorizedException) {
-            // faqat 401 da qayta autentifikatsiya
+            // Agar token expire bo'lgan bo'lsa, faqat 401 bo‘lsa, re-auth qilamiz
             $this->authenticate();
-            $res = $send(KatmAuthTypeEnum::AuthBearer->value);
+            $res = $send();
         }
 
         return KatmResponseDto::from($res);
-    }
-
-    public function currentToken(): ?string
-    {
-        return $this->bearer;
     }
 }

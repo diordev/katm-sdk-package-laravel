@@ -4,6 +4,29 @@ namespace Katm\KatmSdk\Dto\Responses;
 
 use Spatie\LaravelData\Data;
 
+/**
+ * KatmResponseDto
+ *
+ * KATM API’lardan keluvchi universal javob strukturasi uchun DTO.
+ *
+ * Ushbu DTO quyidagi javoblar uchun mos:
+ * - data: asosiy javob ma’lumotlari (masalan: token, user, report va h.k.)
+ * - error: xatolik holatlari
+ * - success: muvoffaqiyat holati flag’i
+ * - validationError: validatsiyaga oid xabarlar
+ * - total: umumiy natijalar soni (masalan, pagination uchun)
+ *
+ * DTO ishlatiladi:
+ * - Token olish
+ * - Hisobotlar
+ * - Har qanday umumiy so‘rovlar
+ *
+ * @property TokenResponseDto|array|null $data Asosiy javob ma’lumotlari
+ * @property ErrorResponseDto|array|null $error Xatolik obyekti yoki massiv
+ * @property bool $success Javob muvaffaqiyatli bo‘lgan-bo‘lmaganligini bildiradi
+ * @property array|string|null $total (ixtiyoriy) umumiy natijalar soni
+ * @property array|string|null $validationError (ixtiyoriy) validatsiya xatolari
+ */
 final class KatmResponseDto extends Data
 {
     public function __construct(
@@ -14,16 +37,21 @@ final class KatmResponseDto extends Data
         public array|string|null $validationError = null,
     ) {}
 
-    /** Qulay: muvaffaqiyat tekshiruvi */
+    /**
+     * Javob muvaffaqiyatli bo‘lganini bildiradi
+     */
     public function isOk(): bool
     {
         return $this->success === true;
     }
 
-    /** Xabarni qulay olish (error yoki validationError’dan) */
+    /**
+     * Xatolik yoki validatsiya xabari matnini qaytaradi
+     *
+     * @param  string|null  $fallback  Agar xabar topilmasa — default qiymat
+     */
     public function errorMessage(?string $fallback = null): ?string
     {
-        // error.errMsg ustuvor
         if (is_array($this->error) && isset($this->error['errMsg'])) {
             return (string) $this->error['errMsg'];
         }
@@ -31,13 +59,17 @@ final class KatmResponseDto extends Data
         return $fallback;
     }
 
-    /** Validation bor-yo‘qligini tekshirish */
+    /**
+     * Validatsiya xatolari mavjudligini aniqlaydi
+     */
     public function hasValidationErrors(): bool
     {
         return ! empty($this->validationError);
     }
 
-    /** Birinchi validation xabarini qaytarish */
+    /**
+     * Birinchi validatsiya xatolik xabarini qaytaradi
+     */
     public function firstValidationError(): ?string
     {
         if (is_string($this->validationError)) {
@@ -50,7 +82,9 @@ final class KatmResponseDto extends Data
         return null;
     }
 
-    /** data ichida TokenResponseDto bo‘lsa accessToken qaytaradi, aks holda null */
+    /**
+     * Agar data ichida `TokenResponseDto` bo‘lsa, `accessToken` ni qaytaradi
+     */
     public function tokenOrNull(): ?string
     {
         if ($this->data instanceof TokenResponseDto) {
@@ -64,7 +98,9 @@ final class KatmResponseDto extends Data
         return null;
     }
 
-    /** data massiv bo‘lsa — massiv qaytaradi; DTO bo‘lsa toArray(), null bo‘lsa [] */
+    /**
+     * `data` maydonini massiv shaklida qaytaradi
+     */
     public function dataArray(): array
     {
         if (is_array($this->data)) {
@@ -78,8 +114,10 @@ final class KatmResponseDto extends Data
     }
 
     /**
-     * data’ni kerakli DTO ga map qilish (agar u hozircha array bo‘lib turgan bo‘lsa).
-     * Masalan: $resp->dataAs(UserDto::class)
+     * `data` ni kerakli DTO klassga map qiladi.
+     * Masalan: `$resp->dataAs(UserDto::class)`
+     *
+     * @param  class-string<Data>  $dtoClass
      */
     public function dataAs(string $dtoClass): ?object
     {
@@ -88,7 +126,7 @@ final class KatmResponseDto extends Data
         }
 
         if ($this->data instanceof $dtoClass) {
-            return $this->data; // allaqachon to‘g‘ri turda
+            return $this->data;
         }
 
         if (is_array($this->data)) {
@@ -96,7 +134,6 @@ final class KatmResponseDto extends Data
             return $dtoClass::from($this->data);
         }
 
-        // Masalan, TokenResponseDto bo‘lsa, lekin siz UserDto so‘rasangiz — mos emas
         return null;
     }
 }

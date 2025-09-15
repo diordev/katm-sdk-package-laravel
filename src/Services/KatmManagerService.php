@@ -4,7 +4,6 @@ namespace Katm\KatmSdk\Services;
 
 use Katm\KatmSdk\Dto\Requests\InitClientRequestDto;
 use Katm\KatmSdk\Dto\Responses\KatmResponseDto;
-use Katm\KatmSdk\Enums\KatmCreditBanType;
 use Katm\KatmSdk\Services\Auth\KatmAuthService;
 use Katm\KatmSdk\Services\Credit\KatmCreditService;
 
@@ -33,8 +32,13 @@ final class KatmManagerService
         return $this->authService->initClient($dto);
     }
 
-    public function creditBan(KatmCreditBanType $type, InitClientRequestDto $dto): KatmResponseDto
+    public function creditBan(InitClientRequestDto $dto): KatmResponseDto
     {
-        return $this->creditBanService->creditBan($type, $dto);
+        return $this->creditBanService->creditBanActive($dto);
+    }
+
+    public function creditBanStatus(InitClientRequestDto $dto): KatmResponseDto
+    {
+        return $this->creditBanService->creditBanStatus($dto);
     }
 }
