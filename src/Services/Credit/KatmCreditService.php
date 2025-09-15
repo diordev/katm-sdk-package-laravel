@@ -76,6 +76,10 @@ final class KatmCreditService extends AbstractHttpClientService
             $res = $this->sendWithAuthRetry($send);
         } catch (BadRequestException $e) {
             if ($this->isClientNotFound($e)) {
+                if ($e->errId === 110){
+                    return KatmResponseDto::from($e->toArray());
+                }
+                // Mijozni ro‘yxatdan o‘tkazamiz va qayta yuboramiz
                 // Mijozni ro‘yxatdan o‘tkazamiz va qayta yuboramiz
                 $this->auth->initClient($dto);
                 $res = $this->sendWithAuthRetry($send);
