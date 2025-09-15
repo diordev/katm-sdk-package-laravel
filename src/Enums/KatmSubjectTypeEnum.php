@@ -8,8 +8,8 @@ namespace Katm\KatmSdk\Enums;
  * Foydalanuvchi subyekti turini bildiruvchi enum.
  *
  * Qiymatlar:
- * - `Individual`   → 1 (Jismoniy shaxs)
- * - `Organization` → 2 (Yuridik shaxs)
+ * - `Organization` → 1 (Yuridik shaxs)
+ * - `Individual`   → 2 ( Jismoniy shaxs)
  *
  * Ushbu enum quyidagi holatlarda ishlatiladi:
  * - API so‘rovlarida subyekt turini ko‘rsatish
@@ -18,9 +18,10 @@ namespace Katm\KatmSdk\Enums;
  */
 enum KatmSubjectTypeEnum: int
 {
-    /** Jismoniy shaxs */
-    case Individual = 1;
-
     /** Yuridik shaxs (tashkilot) */
-    case Organization = 2;
+    case Organization = 1;
+
+    /** Jismoniy shaxs */
+    case Individual = 2;
+
 }
