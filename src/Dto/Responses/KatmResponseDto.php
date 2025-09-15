@@ -32,7 +32,7 @@ final class KatmResponseDto extends Data
     public function __construct(
         public TokenResponseDto|array|null $data,
         public ErrorResponseDto|array|null $error,
-        public bool $success,
+        public bool $success = false,
         public array|string|null $total = null,
         public array|string|null $validationError = null,
     ) {}

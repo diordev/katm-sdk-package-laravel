@@ -43,6 +43,7 @@ final class KatmCreditService extends AbstractHttpClientService
      *      - Agar status=1 → allaqachon aktiv, shu javobni qaytaradi
      *      - Agar status=0 → ban qo‘yadi
      *    - 400 (BadRequest, client not found/102) → bir marta initClient + retry
+     *    - 400 (BadRequest, client not found/110) → pinfl xato response
      * - Aks xatolar — tashlanadi
      *
      * @throws UnauthorizedException|BadRequestException
@@ -57,14 +58,21 @@ final class KatmCreditService extends AbstractHttpClientService
 
         // 2) Ban qo‘yish
         $payload = $dto->toCreditBanActiveDto();
-        $res = fn () => $this->post(
-            KatmApiEndpointEnum::CreditBanActive->value,
-            $payload,
-            KatmAuthTypeEnum::AuthBearer->value
+        $send = fn () => $this->post(
+            path: KatmApiEndpointEnum::CreditBanActive->value,
+            payload: $payload,
+            auth: KatmAuthTypeEnum::AuthBearer->value
         );
 
-        return KatmResponseDto::from($res);
+        try {
+            $res = $send();
+        } catch (BadRequestException $e) {
+            if ($this->isClientNotFound($e)) {
+                return KatmResponseDto::from($e->toArray());
+            }
+        }
 
+        return KatmResponseDto::from($res);
     }
 
     /**
@@ -75,9 +83,6 @@ final class KatmCreditService extends AbstractHttpClientService
      * - Agar `success = true` bo‘lsa:
      *   - status = 0 → "Запрет не активирован"
      *   - status = 1 → "Запрет активирован"
-     */
-    /**
-     * Kredit ban statusini tekshiradi.
      *
      * @throws BadRequestException
      */
@@ -102,17 +107,7 @@ final class KatmCreditService extends AbstractHttpClientService
                 $this->auth->initClient($dto);
                 $res = $send();
             } else {
-                $data = [
-                    'data' => [$dto->toCreditBanStatusDto()],
-                    'success' => false,
-                    'error' => [
-                        'errId' => $e->errId,
-                        'isFriendly' => $e->isFriendly,
-                        'errMsg' => $e->getMessage(),
-                    ],
-                ];
-
-                return KatmResponseDto::from($data);
+                return KatmResponseDto::from($e->toArray());
             }
         }
 
@@ -135,14 +130,9 @@ final class KatmCreditService extends AbstractHttpClientService
      */
     private function isClientNotFound(BadRequestException $e): bool
     {
-        if ($e->errId === 102) {
-            return true;
-        }
+        return match ($e->errId) {
+            102, 110 => true
+        };
 
-        $m = mb_strtolower($e->getMessage());
-
-        return str_contains($m, 'Пользователь не найден')
-            || str_contains($m, 'Client not found')
-            || str_contains($m, 'Not found');
     }
 }

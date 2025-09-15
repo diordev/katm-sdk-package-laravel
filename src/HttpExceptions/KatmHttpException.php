@@ -42,4 +42,16 @@ class KatmHttpException extends RuntimeException
     ) {
         parent::__construct($message, $code, $previous);
     }
+
+    public function toArray(): array
+    {
+
+        return [
+            'error' => [
+                'errId' => $this->errId,
+                'isFriendly' => $this->isFriendly,
+                'errMsg' => $this->message,
+            ],
+        ];
+    }
 }

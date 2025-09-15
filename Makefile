@@ -13,6 +13,6 @@ u-tests:
 format:
 	./vendor/bin/pint
 
-# Git version tag boshqarish.
-add-version-git:
-	git tag -a v0.1.0 -m "release 0.1.0" && git push origin v0.1.0
+# Git tag yani versiyalar bilish
+git-tag:
+	git tag
