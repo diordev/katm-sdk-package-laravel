@@ -50,6 +50,9 @@ final class KatmCreditService extends AbstractHttpClientService
      */
     public function creditBanActive(InitClientRequestDto $dto): KatmResponseDto
     {
+        if (! $this->restoreTokenFromCache()) {
+            $this->auth->authenticate();
+        }
 
         // 1) Agar allaqachon aktiv bo‘lsa, shu javobni qaytarib qo‘yamiz
         if (($statusResp->data['status'] ?? null) === 1) {
