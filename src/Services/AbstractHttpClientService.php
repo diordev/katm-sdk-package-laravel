@@ -210,7 +210,7 @@ abstract class AbstractHttpClientService
         // Auth
         return match ($auth) {
             'basic' => $client->withBasicAuth($this->username, $this->password),
-            'bearer' => $this->bearer ? $client->withToken($this->bearer) : throw new RuntimeException('Bearer token topilmadi. Authentication qiling.'),
+            'bearer' => $this->restoreTokenFromCache() ? $client->withToken($this->bearer) : throw new RuntimeException('Bearer token topilmadi. Authentication qiling.'),
             default => $client,
         };
     }
