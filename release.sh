@@ -38,7 +38,7 @@ git pull origin dev-main
 echo "🚀 Merging dev-main → main"
 git checkout main
 git pull origin main
-git merge dev-main
+git merge dev-main --no-edit
 
 # Agar merge conflict bo'lsa toxtaydi
 if [[ $? -ne 0 ]]; then
