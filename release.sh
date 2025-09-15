@@ -34,9 +34,4 @@ echo "📤 Pushing to origin..."
 git push origin main
 git push origin $VERSION
 
-# 7. Ishlab chiqish branchidan qaytish
-echo "🚀 Switching to dev-main branch..."
-git checkout dev-main
-
-
 echo "✅ Release $VERSION created and pushed successfully!"
