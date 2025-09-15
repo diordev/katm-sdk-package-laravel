@@ -1,37 +1,55 @@
 #!/bin/bash
 
-# USAGE: ./release.sh v1.2.3
+set -e
 
-set -e  # xatolik bo'lsa, script to'xtaydi
+echo "🔍 Yangi release chiqarish turi:"
+echo "1) Bugfix (patch) - v1.0.0 → v1.0.1"
+echo "2) Feature (minor) - v1.0.0 → v1.1.0"
+echo "3) Breaking (major) - v1.0.0 → v2.0.0"
+read -p "🧩 Tanlang (1/2/3): " type
 
-# 1. Tekshir: versiya raqami berilganmi
-if [ -z "$1" ]; then
-  echo "❌ Versiya raqami kerak. Masalan: ./release.sh v1.0.0"
-  exit 1
+if [[ "$type" != "1" && "$type" != "2" && "$type" != "3" ]]; then
+    echo "❌ Noto‘g‘ri tanlov. 1, 2 yoki 3 ni tanlang."
+    exit 1
 fi
 
-VERSION=$1
+# Eng so‘nggi tagni olish
+last_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
 
-# 2. Ishlab chiqish branchidan chiqamiz
+# Versiyani bo‘lish
+version=${last_tag#v}
+IFS='.' read -r major minor patch <<< "$version"
+
+case "$type" in
+    1) patch=$((patch + 1)) ;;
+    2) minor=$((minor + 1)); patch=0 ;;
+    3) major=$((major + 1)); minor=0; patch=0 ;;
+esac
+
+new_version="v$major.$minor.$patch"
+
+echo "📦 Yangi versiya: $new_version"
+
+# dev-main ni main ga merge qilish
 echo "🚀 Switching to dev-main branch..."
 git checkout dev-main
-
-# 3. Eng so‘nggi o‘zgarishlar
 git pull origin dev-main
 
-# 4. Mainga o‘tamiz
-echo "🚀 Merging dev-main -> main"
+echo "🚀 Merging dev-main → main"
 git checkout main
 git pull origin main
 git merge dev-main
 
-# 5. Tag qo‘yish
-echo "🏷️ Creating tag: $VERSION"
-git tag -a $VERSION -m "Release $VERSION"
+# Agar merge conflict bo'lsa toxtaydi
+if [[ $? -ne 0 ]]; then
+    echo "⚠️ Merge konflikt. Avval hal qiling."
+    exit 1
+fi
 
-# 6. Git push (main + tag)
+# Yangi tag yaratish
 echo "📤 Pushing to origin..."
+git tag -a "$new_version" -m "Release $new_version"
 git push origin main
-git push origin $VERSION
+git push origin "$new_version"
 
-echo "✅ Release $VERSION created and pushed successfully!"
+echo "✅ Release $new_version tayyor va GitHub'ga push qilindi!"
