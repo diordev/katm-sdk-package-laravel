@@ -32,7 +32,7 @@ final class KatmManagerService
         return $this->authService->initClient($dto);
     }
 
-    public function creditBan(InitClientRequestDto $dto): KatmResponseDto
+    public function creditBanActive(InitClientRequestDto $dto): KatmResponseDto
     {
         return $this->creditBanService->creditBanActive($dto);
     }

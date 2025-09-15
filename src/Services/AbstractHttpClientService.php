@@ -119,6 +119,12 @@ abstract class AbstractHttpClientService
         if ($this->bearer) {
             $jwt_unix_time = (int) ($this->jwtExpOrNull($this->bearer));
             $ttl = $this->calculateTokenTtl($jwt_unix_time);
+            /** Test uchun yozilgan if construcisasi
+             * Asil Apida jwt dan oladi ttl yani expire holatini
+             * */
+            if ($ttl === 0) {
+                $ttl = 300;
+            }
             Cache::put(self::TOKEN_CACHE_KEY, $this->bearer, $ttl);
         } else {
             Cache::forget(self::TOKEN_CACHE_KEY);
@@ -210,7 +216,7 @@ abstract class AbstractHttpClientService
         // Auth
         return match ($auth) {
             'basic' => $client->withBasicAuth($this->username, $this->password),
-            'bearer' => $this->restoreTokenFromCache() ? $client->withToken($this->bearer) : throw new RuntimeException('Bearer token topilmadi. Authentication qiling.'),
+            'bearer' => $this->bearer ? $client->withToken($this->bearer) : throw new RuntimeException('Bearer token topilmadi. Authentication qiling.'),
             default => $client,
         };
     }

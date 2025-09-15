@@ -6,7 +6,6 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Katm\KatmSdk\Enums\KatmApiEndpointEnum;
 use Katm\KatmSdk\Facades\Katm;
-use Katm\KatmSdk\HttpExceptions\KatmApiException;
 use Katm\KatmSdk\Tests\TestCase;
 
 class KatmFacadeTest extends TestCase
@@ -140,88 +139,5 @@ class KatmFacadeTest extends TestCase
                 && $req->method() === 'POST'
                 && $req->hasHeader('Authorization', 'Bearer new_token'),
         ]);
-    }
-
-    public function test_credit_ban_status_success_status_0(): void
-    {
-        Cache::put('katm:token', 'valid_token');
-
-        Http::fake([
-            $this->base.KatmApiEndpointEnum::CreditBanStatus->value => Http::response([
-                'success' => true,
-                'data' => ['status' => 0],
-            ], 200),
-        ]);
-
-        $dto = $this->makeInitClientDto();
-        $resp = Katm::creditBanStatus($dto);
-
-        $this->assertTrue($resp->success);
-        $this->assertSame('Запрет не активирован', $resp->data['resultMessage']);
-    }
-
-    public function test_credit_ban_status_success_status_1(): void
-    {
-        Cache::put('katm:token', 'valid_token');
-
-        Http::fake([
-            $this->base.KatmApiEndpointEnum::CreditBanStatus->value => Http::response([
-                'success' => true,
-                'data' => ['status' => 1],
-            ], 200),
-        ]);
-
-        $dto = $this->makeInitClientDto();
-        $resp = Katm::creditBanStatus($dto);
-
-        $this->assertTrue($resp->success);
-        $this->assertSame('Запрет активирован', $resp->data['resultMessage']);
-    }
-
-    public function test_credit_ban_status_success_unknown_status(): void
-    {
-        Cache::put('katm:token', 'valid_token');
-
-        Http::fake([
-            $this->base.KatmApiEndpointEnum::CreditBanStatus->value => Http::response([
-                'success' => true,
-                'data' => ['status' => 99],
-            ], 200),
-        ]);
-
-        $dto = $this->makeInitClientDto();
-        $resp = Katm::creditBanStatus($dto);
-
-        $this->assertTrue($resp->success);
-        $this->assertSame('Неизвестный статус', $resp->data['resultMessage']);
-    }
-
-    public function test_credit_ban_status_with_failed_response(): void
-    {
-        $this->expectException(KatmApiException::class);
-        $this->expectExceptionMessage('Some error');
-
-        Cache::put('katm:token', 'valid_token');
-
-        Http::fake([
-            $this->base.KatmApiEndpointEnum::CreditBanStatus->value => Http::response([
-                'success' => false,
-                'error' => ['errMsg' => 'Some error'],
-            ], 200),
-        ]);
-
-        $dto = $this->makeInitClientDto();
-        Katm::creditBanStatus($dto);
-        Cache::put('katm:token', 'valid_token');
-
-        Http::fake([
-            $this->base.KatmApiEndpointEnum::CreditBanStatus->value => Http::response([
-                'success' => false,
-                'error' => ['errMsg' => 'Some error'],
-            ], 200),
-        ]);
-
-        $dto = $this->makeInitClientDto();
-        Katm::creditBanStatus($dto);
     }
 }

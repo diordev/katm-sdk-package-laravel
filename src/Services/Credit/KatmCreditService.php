@@ -14,52 +14,57 @@ use Katm\KatmSdk\Services\AbstractHttpClientService;
 use Katm\KatmSdk\Services\Auth\KatmAuthService;
 
 /**
- * KatmCreditService
+ * # KatmCreditService
  *
- * KATM API orqali kredit bo‘yicha taqiqlash (ban) operatsiyalarini bajaradi.
+ * Kredit bo‘yicha ban (taqiqlash) servis amallari:
+ * - **creditBanStatus**: holatni tekshiradi, `resultMessage` ni boyitadi.
+ * - **creditBanActive**: agar allaqachon aktiv bo‘lsa — statusni qaytaradi, aks holda aktivatsiya qiladi.
  *
- * Quyidagi ishlarni avtomatik bajaradi:
- * - Bearer token mavjud bo‘lmasa, `authenticate()` chaqiradi
- * - Kreditga oid so‘rovni yuboradi (active yoki status)
- * - 401 holatda qayta autentifikatsiya qiladi
- * - 400 holatda agar client topilmasa, `initClient()` bilan ro‘yxatdan o‘tkazadi
+ * Umumiy xulq:
+ * - Bearer token cache’da bo‘lmasa — `authenticate()` chaqiriladi.
+ * - 401 (Unauthorized) holatda **bir marta** qayta autentifikatsiya qilinadi va so‘rov qayta yuboriladi.
+ * - 400 (BadRequest) bo‘lib, `errId` = `102|110` (client not found) bo‘lsa:
+ *    - status uchun: `initClient()` qilinadi va qayta yuboriladi;
+ *    - active uchun: `initClient()` qilinadi va qayta yuboriladi.
+ * - Boshqa `BadRequestException` lar DTO ko‘rinishida qaytariladi (`KatmResponseDto::from($e->toArray())`).
  */
 final class KatmCreditService extends AbstractHttpClientService
 {
-    /**
-     * @param  KatmAuthService  $auth  Autentifikatsiya servisi (token olish, init client va h.k.)
-     */
     public function __construct(private readonly KatmAuthService $auth)
     {
         parent::__construct();
     }
 
     /**
-     * Kredit bo‘yicha ban operatsiyasi (ACTIVE yoki STATUS).
+     * Kredit ban’ni aktivlashtirish (agar allaqachon aktiv bo‘lsa, statusni qaytaradi).
      *
-     * Ishlash tartibi:
-     * - So‘rov yuboriladi:
-     *    - creditBanStatus() metod orqali status tekshiradi
-     *      - Agar status=1 → allaqachon aktiv, shu javobni qaytaradi
-     *      - Agar status=0 → ban qo‘yadi
-     *    - 400 (BadRequest, client not found/102) → bir marta initClient + retry
-     *    - 400 (BadRequest, client not found/110) → pinfl xato response
-     * - Aks xatolar — tashlanadi
+     * Algoritm:
+     * 1) Tokenni tekshirish/olish.
+     * 2) Statusni olib ko‘rish:
+     *    - status = 1 → shu javob qaytariladi (ban allaqachon aktiv).
+     *    - status = 0 → aktivlashtirishga o‘tiladi.
+     * 3) Aktivlashtirish so‘rovi:
+     *    - 401 → re-auth → retry (1 marta).
+     *    - 400 (client not found: 102|110) → initClient → retry.
+     *    - boshqa 400 → xatoni DTO sifatida qaytarish.
+     * 4) Qulaylik uchun `for_deactivation` maydoni qo‘shiladi.
      *
-     * @throws UnauthorizedException|BadRequestException
+     * @throws UnauthorizedException
+     * @throws BadRequestException
      */
     public function creditBanActive(InitClientRequestDto $dto): KatmResponseDto
     {
-        if (! $this->restoreTokenFromCache()) {
-            $this->auth->authenticate();
-        }
+        $this->ensureToken();
 
-        // 1) Agar allaqachon aktiv bo‘lsa, shu javobni qaytarib qo‘yamiz
+        // 1) Avval statusni olib ko‘ramiz
+        $statusResp = $this->tryStatusWithInitIfNeeded($dto);
+
         if (($statusResp->data['status'] ?? null) === 1) {
+            // Allaqachon aktiv — shu javobni qaytaramiz
             return $statusResp;
         }
 
-        // 2) Ban qo‘yish
+        // 2) Aktivlashtirish
         $payload = $dto->toCreditBanActiveDto();
         $send = fn () => $this->post(
             path: KatmApiEndpointEnum::CreditBanActive->value,
@@ -68,42 +73,48 @@ final class KatmCreditService extends AbstractHttpClientService
         );
 
         try {
-            $res = $send();
+            $res = $this->sendWithAuthRetry($send);
         } catch (BadRequestException $e) {
             if ($this->isClientNotFound($e)) {
-                return KatmResponseDto::from($e->toArray());
+                // Mijozni ro‘yxatdan o‘tkazamiz va qayta yuboramiz
+                $this->auth->initClient($dto);
+                $res = $this->sendWithAuthRetry($send);
             } else {
-                $this->auth->authenticate();
-                $res = $send();
+                // Boshqa 400 lar — DTO ko‘rinishida qaytaramiz
+                return KatmResponseDto::from($e->toArray());
             }
         }
-        $res['data']['for_deactication'] = [
-            'url' => 'https://portal.infokredit.uz/ban',
-            'apps' => 'KATM, MyGo'
-        ];
 
+        // Qo‘shimcha ma’lumot (deaktivatsiya havolasi)
+        $res['data']['for_deactivation'] = [
+            'url' => 'https://portal.infokredit.uz/ban',
+            'apps' => 'KATM, MyGo',
+        ];
 
         return KatmResponseDto::from($res);
     }
 
     /**
-     * Kredit ban statusini tekshirish.
-     * Cashda Bearer yo‘q bo‘lsa → authenticate() + withBearer()
-     * Client Identifikatsiyadan o'tmagan bo'lsa initClient()
-     * Ishlash logikasi:
-     * - Agar `success = true` bo‘lsa:
-     *   - status = 0 → "Запрет не активирован"
-     *   - status = 1 → "Запрет активирован"
+     * Kredit ban statusini tekshiradi va resultMessage qo‘shadi.
+     *
+     * Xulq:
+     * - Token cache’da bo‘lmasa — autentifikatsiya.
+     * - 401 → re-auth → retry (1 marta).
+     * - 400 (client not found: 102|110) → initClient → retry.
+     * - Boshqa 400 → DTO ko‘rinishida qaytarish.
+     *
+     * `resultMessage`:
+     * - status = 0 → "Запрет не активирован"
+     * - status = 1 → "Запрет активирован"
+     * - boshqalar → "Неизвестный статус"
      *
      * @throws BadRequestException
+     * @throws UnauthorizedException
      */
     public function creditBanStatus(InitClientRequestDto $dto): KatmResponseDto
     {
-        if (! $this->restoreTokenFromCache()) {
-            $this->auth->authenticate();
-        }
+        $this->ensureToken();
 
-        // 1) Status tekshirish
         $payload = $dto->toCreditBanStatusDto();
         $send = fn () => $this->post(
             path: KatmApiEndpointEnum::CreditBanStatus->value,
@@ -112,38 +123,110 @@ final class KatmCreditService extends AbstractHttpClientService
         );
 
         try {
-            $res = $send();
+            $res = $this->sendWithAuthRetry($send);
         } catch (BadRequestException $e) {
             if ($this->isClientNotFound($e)) {
                 $this->auth->initClient($dto);
-                $res = $send();
+                $res = $this->sendWithAuthRetry($send);
             } else {
                 return KatmResponseDto::from($e->toArray());
             }
         }
 
-        // 2) Agar success = true → status bo‘yicha resultMessage qo‘shamiz
+        $this->decorateStatusMessage($res);
+
+        return KatmResponseDto::from($res);
+    }
+
+    /**
+     * 400 (BadRequestException) API xabari mijoz topilmaganini bildiradimi?
+     * KATM tarafdagi kelishuvga ko‘ra errId = 102 yoki 110 bo‘lsa — klient yo‘q.
+     */
+    private function isClientNotFound(BadRequestException $e): bool
+    {
+        return match ($e->errId) {
+            102, 110 => true,
+            default => false,
+        };
+    }
+
+    /**
+     * Statusni olish: 401 bo‘lsa re-auth, 102/110 bo‘lsa init-client va retry.
+     * Har doim resultMessage bilan qaytaradi.
+     *
+     * @throws UnauthorizedException
+     * @throws BadRequestException
+     */
+    private function tryStatusWithInitIfNeeded(InitClientRequestDto $dto): KatmResponseDto
+    {
+        $payload = $dto->toCreditBanStatusDto();
+        $send = fn () => $this->post(
+            path: KatmApiEndpointEnum::CreditBanStatus->value,
+            payload: $payload,
+            auth: KatmAuthTypeEnum::AuthBearer->value
+        );
+
+        try {
+            $res = $this->sendWithAuthRetry($send);
+        } catch (BadRequestException $e) {
+            if ($this->isClientNotFound($e)) {
+                $this->auth->initClient($dto);
+                $res = $this->sendWithAuthRetry($send);
+            } else {
+                return KatmResponseDto::from($e->toArray());
+            }
+        }
+
+        $this->decorateStatusMessage($res);
+
+        return KatmResponseDto::from($res);
+    }
+
+    /**
+     * 401 Unauthorized bo‘lsa: bir marta autentifikatsiya qilib qayta yuboradi.
+     * Boshqa xatolarni o‘tkazib yuboradi.
+     *
+     * @return array<mixed>
+     *
+     * @throws UnauthorizedException
+     * @throws BadRequestException
+     */
+    private function sendWithAuthRetry(callable $send): array
+    {
+
+        try {
+            return $send();
+        } catch (UnauthorizedException) {
+            $this->auth->authenticate();
+            $this->restoreTokenFromCache();
+
+            return $send();
+        }
+    }
+
+    /**
+     * Tokenni cache’dan tiklash yoki autentifikatsiya qilish.
+     */
+    private function ensureToken(): void
+    {
+        if (! $this->restoreTokenFromCache()) {
+            $this->auth->authenticate();
+            $this->restoreTokenFromCache();
+        }
+    }
+
+    /**
+     * Status javobini qulay matn bilan boyitadi.
+     *
+     * @param  array<string,mixed>  $res
+     */
+    private function decorateStatusMessage(array &$res): void
+    {
         $status = $res['data']['status'] ?? null;
         $res['data']['resultMessage'] = match ($status) {
             0 => 'Запрет не активирован',
             1 => 'Запрет активирован',
             default => 'Неизвестный статус',
         };
-
-        return KatmResponseDto::from($res);
-    }
-
-    /**
-     * 400 (BadRequestException) ichidagi xatolik foydalanuvchi topilmaganini bildiradimi — aniqlaydi.
-     *
-     * @param  BadRequestException  $e  400 xatolik
-     * @return bool true bo‘lsa — client yo‘qligi aniqlangan
-     */
-    private function isClientNotFound(BadRequestException $e): bool
-    {
-        return match ($e->errId) {
-            102, 110 => true
-        };
-
     }
 }

@@ -21,13 +21,13 @@ use Spatie\LaravelData\Data;
 final class ErrorResponseDto extends Data
 {
     /**
-     * @param  int  $errId  Xatolik identifikatori (masalan, 102)
-     * @param  bool  $isFriendly  Foydalanuvchiga ko‘rsatish mumkin bo‘lgan xatolik flagi
-     * @param  string  $errMsg  Xatolik matni
+     * @param  null|int  $errId  Xatolik identifikatori (masalan, 102)
+     * @param  null|bool  $isFriendly  Foydalanuvchiga ko‘rsatish mumkin bo‘lgan xatolik flagi
+     * @param  null|string  $errMsg  Xatolik matni
      */
     public function __construct(
-        public int $errId,
-        public bool $isFriendly,
-        public string $errMsg,
+        public ?int $errId,
+        public ?bool $isFriendly,
+        public ?string $errMsg,
     ) {}
 }
