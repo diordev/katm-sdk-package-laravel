@@ -7,7 +7,7 @@ tinker:
 
 # Test muhitini ishga tushurish
 u-tests:
-	vendor/bin/testbench tinker
+	./vendor/bin/phpunit
 
 # Laravel formatda code tashkil qilish.
 format:

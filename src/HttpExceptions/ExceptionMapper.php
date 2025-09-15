@@ -43,44 +43,57 @@ use Katm\KatmSdk\HttpExceptions\Server\ServiceUnavailableException;
  * yagona markaziy qatlamda boshqariladi va SDK foydalanuvchisi
  * xatolarning qaysi turdan kelib chiqqanini aniq bilib oladi.
  */
-final class ExceptionMapper
+final readonly class ExceptionMapper
 {
     /** Response statusga qarab maxsus exception tashlaydi */
     public static function fromResponse(Response $res): never
     {
         $status = $res->status();
-        $payload = self::shortBody($res);
-        $msg = self::buildMessage($status, $payload);
+        $body = $res->json() ?? [];
+        $error = is_array($body['error'] ?? null) ? $body['error'] : [];
+        $errId = isset($error['errId']) ? (int) $error['errId'] : null;
+        $friendly = isset($error['isFriendly']) ? (bool) $error['isFriendly'] : null;
+        $errMsg = $error['errMsg'] ?? ($body['message'] ?? null);
 
-        switch ($status) {
-            case 400: throw new BadRequestException($msg, 400);
-            case 401: throw new UnauthorizedException($msg, 401);
-            case 403: throw new ForbiddenException($msg, 403);
-            case 404: throw new NotFoundException($msg, 404);
-            case 422: throw new UnprocessableEntityException($msg, 422);
-            case 429: throw new TooManyRequestsException($msg, 429);
-            case 500: throw new ServerErrorException($msg, 500);
-            case 502:
-            case 503:
-            case 504:
-                throw new ServiceUnavailableException($msg, $status);
-            default:
-                // noma’lum status – bazaviy exception
-                throw new KatmHttpException($msg, $status);
-        }
+        // Xabar: errMsg bo'lsa shuni afzal ko'ramiz
+        $msg = sprintf('HTTP %d: %s', $status, $errMsg ? (string) $errMsg : json_encode($body, JSON_UNESCAPED_UNICODE));
+
+        $args = [$msg, $status, null, $errId, $friendly, $errMsg];
+
+        // Statusga mos exception
+        $ex = match ($status) {
+            400 => new BadRequestException(...$args),
+            401 => new UnauthorizedException(...$args),
+            403 => new ForbiddenException(...$args),
+            404 => new NotFoundException(...$args),
+            422 => new UnprocessableEntityException(...$args),
+            429 => new TooManyRequestsException(...$args),
+            500 => new ServerErrorException(...$args),
+            502, 503, 504 => new ServiceUnavailableException(...$args),
+            default => new KatmHttpException(...$args),
+        };
+
+        throw $ex;
     }
 
     public static function ensureSuccess(array $json, int $status = 200): void
     {
-        $ok = $json['success'] ?? null;
-        if ($ok === true) {
+        if (($json['success'] ?? null) === true) {
             return;
         }
 
-        $msg = (string) ($json['error']['errMsg'] ?? $json['message'] ?? 'Operation failed.');
-        $code = (int) ($json['error']['code'] ?? $json['code'] ?? $status);
+        $error = is_array($json['error'] ?? null) ? $json['error'] : [];
+        $errId = isset($error['errId']) ? (int) $error['errId'] : null;
+        $friendly = isset($error['isFriendly']) ? (bool) $error['isFriendly'] : null;
+        $errMsg = $error['errMsg'] ?? ($json['message'] ?? 'Operation failed.');
 
-        throw new KatmApiException($msg, $code);
+        throw new KatmApiException(
+            message: $errMsg,
+            code: $errId ?? $status,
+            errId: $errId,
+            isFriendly: $friendly,
+            errMsg: $errMsg,
+        );
     }
 
     /** Transport-level xatolarni normalizatsiya qilish */
@@ -89,10 +102,11 @@ final class ExceptionMapper
         if ($e instanceof ConnectionException) {
             throw new ServiceUnavailableException('Connection failed or timeout (connect/read).', 0, $e);
         }
+
         if ($e instanceof RequestException && $e->response) {
-            self::fromResponse($e->response); // never
+            self::fromResponse($e->response);
         }
-        // boshqa xatolar – aynan o‘zini yuboramiz
+
         throw $e;
     }
 

@@ -28,10 +28,4 @@ namespace Katm\KatmSdk\HttpExceptions;
  * - HTTP-level xatolar (400, 401, 403, 500) alohida exceptionlar bilan ajratiladi.
  * - KatmApiException esa aynan API’dan kelgan biznes xatoni bildiradi.
  */
-class KatmApiException extends KatmHttpException
-{
-    public function __construct(string $message = 'KATM API error', int $code = 0, ?\Throwable $prev = null)
-    {
-        parent::__construct($message, $code, $prev);
-    }
-}
+class KatmApiException extends KatmHttpException {}

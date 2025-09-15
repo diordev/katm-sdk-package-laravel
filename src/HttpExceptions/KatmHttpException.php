@@ -21,8 +21,15 @@ use RuntimeException;
  */
 class KatmHttpException extends RuntimeException
 {
-    public function __construct(string $message = 'HTTP error', int $code = 0, ?\Throwable $previous = null)
-    {
+    public function __construct(
+        string $message = 'HTTP error',
+        int $code = 0,
+        ?\Throwable $previous = null,
+        public ?int $errId = null,
+        public ?bool $isFriendly = null,
+        public ?string $errMsg = null,
+
+    ) {
         parent::__construct($message, $code, $previous);
     }
 }

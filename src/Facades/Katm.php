@@ -3,12 +3,16 @@
 namespace Katm\KatmSdk\Facades;
 
 use Illuminate\Support\Facades\Facade;
-use Katm\KatmSdk\Providers\KatmSdkServiceProvider;
+use Katm\KatmSdk\Services\KatmManagerService;
 
+/**
+ * @method static \Katm\KatmSdk\Dto\Responses\KatmResponseDto authenticate()
+ * @method static \Katm\KatmSdk\Dto\Responses\KatmResponseDto initClient(\Katm\KatmSdk\Dto\Requests\InitClientRequestDto $dto)
+ */
 class Katm extends Facade
 {
     protected static function getFacadeAccessor(): string
     {
-        return KatmSdkServiceProvider::class;
+        return KatmManagerService::class;
     }
 }

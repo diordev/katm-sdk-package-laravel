@@ -5,7 +5,7 @@ namespace Katm\KatmSdk\Dto\Requests;
 use Katm\KatmSdk\Enums\KatmLanguageTypeEnum;
 use Spatie\LaravelData\Data;
 
-class GetReportRequestDto extends Data
+final class GetReportRequestDto extends Data
 {
     public function __construct(
         public KatmLanguageTypeEnum $language,

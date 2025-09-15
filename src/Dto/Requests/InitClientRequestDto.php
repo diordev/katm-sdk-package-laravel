@@ -3,9 +3,10 @@
 namespace Katm\KatmSdk\Dto\Requests;
 
 use Katm\KatmSdk\Enums\KatmGenderTypeEnum;
+use Katm\KatmSdk\Enums\KatmSubjectTypeEnum;
 use Spatie\LaravelData\Data;
 
-class InitClientRequestDto extends Data
+final class InitClientRequestDto extends Data
 {
     public function __construct(
         public string $pPinfl,
@@ -25,4 +26,25 @@ class InitClientRequestDto extends Data
         public string $pEmail
     ) {}
 
+    public function toCreditBanActiveDto(): array
+    {
+        $dto = new CreditBanActiveRequestDto(
+            pIdentifier: $this->pPinfl,
+            pFullName: $this->pFirstName.' '.$this->pLastName.' '.$this->pMiddleName,
+            pIdenDate: $this->pBirthDate,
+            pSubjectType: KatmSubjectTypeEnum::Individual);
+
+        return $dto->toArray();
+
+    }
+
+    public function toCreditBanStatusDto(): array
+    {
+        $dto = new CreditBanStatusRequestDto(
+            pIdentifier: $this->pPinfl,
+            pSubjectType: KatmSubjectTypeEnum::Individual
+        );
+
+        return $dto->toArray();
+    }
 }
