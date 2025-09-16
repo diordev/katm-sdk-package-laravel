@@ -50,6 +50,30 @@ final class InitClientRequestDto extends Data
     ) {}
 
     /**
+     * Barcha kerakli sanalarni ISO 8601 formatga o'tkazadi: `Y-m-d`
+     */
+    public function formatDatesToIso(): self
+    {
+        return new self(
+            pPinfl: $this->pPinfl,
+            pDocSeries: $this->pDocSeries,
+            pDocNumber: $this->pDocNumber,
+            pFirstName: $this->pFirstName,
+            pLastName: $this->pLastName,
+            pMiddleName: $this->pMiddleName,
+            pBirthDate: Carbon::createFromFormat('d.m.Y', $this->pBirthDate)->toDateString(),
+            pIssueDocDate: Carbon::createFromFormat('d.m.Y', $this->pIssueDocDate)->toDateString(),
+            pExpiredDocDate: Carbon::createFromFormat('d.m.Y', $this->pExpiredDocDate)->toDateString(),
+            pGender: $this->pGender,
+            pDistrictId: $this->pDistrictId,
+            pResAddress: $this->pResAddress,
+            pRegAddress: $this->pRegAddress,
+            pPhone: $this->pPhone,
+            pEmail: $this->pEmail
+        );
+    }
+
+    /**
      * `CreditBanActiveRequestDto` uchun kerakli ma'lumotlarni hosil qiladi
      *
      * @return array Mavjud DTO dan kredit ban active formatidagi massiv
