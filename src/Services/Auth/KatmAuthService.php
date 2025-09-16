@@ -46,15 +46,13 @@ final class KatmAuthService extends AbstractHttpClientService
             auth: KatmAuthTypeEnum::AuthNone->value
         );
 
-        $data = KatmResponseDto::from($res);
-
         // Eski accessToken ni olib tashlaymiz
         $this->withoutBearer();
 
         // Yangi accessToken ni bearer sifatida saqlaymiz
-        $this->withBearer($data->data->accessToken ?? null);
+        $this->withBearer($res['data']['accessToken'] ?? null);
 
-        return $data;
+        return KatmResponseDto::from($res);
     }
 
     /**

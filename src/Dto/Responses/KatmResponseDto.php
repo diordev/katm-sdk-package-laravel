@@ -30,8 +30,8 @@ use Spatie\LaravelData\Data;
 final class KatmResponseDto extends Data
 {
     public function __construct(
-        public TokenResponseDto|array|null $data,
-        public ErrorResponseDto|array|null $error,
+        public mixed $data = null,
+        public mixed $error = null,
         public bool $success = false,
         public array|string|null $total = null,
         public array|string|null $validationError = null,
@@ -87,9 +87,6 @@ final class KatmResponseDto extends Data
      */
     public function tokenOrNull(): ?string
     {
-        if ($this->data instanceof TokenResponseDto) {
-            return $this->data->accessToken ?? null;
-        }
 
         if (is_array($this->data) && array_key_exists('accessToken', $this->data)) {
             return is_string($this->data['accessToken']) ? $this->data['accessToken'] : null;

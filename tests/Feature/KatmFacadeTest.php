@@ -42,7 +42,7 @@ class KatmFacadeTest extends TestCase
         $this->assertSame(
             'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9
                     .eyJtZXJjaGFudElkIjoyMywicm9sZSI6InVzZXIiLCJuYW1lIjoibWtiYW5rIiwidXJsIjpudWxsLCJpYXQiOjE3NTc5MjgzOTMsImV4cCI6MTc1ODAxNDc5M30
-                    .QCm_bdh86FOCZlAih6G6p5wFieCuzGq9Opvi_0goRvg', $resp->data->accessToken
+                    .QCm_bdh86FOCZlAih6G6p5wFieCuzGq9Opvi_0goRvg', $resp->data['accessToken']
         );
 
         Http::assertSentCount(1);
