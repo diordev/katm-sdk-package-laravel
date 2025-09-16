@@ -80,7 +80,6 @@ final class KatmCreditService extends AbstractHttpClientService
                     return KatmResponseDto::from($e->toArray());
                 }
                 // Mijozni ro‘yxatdan o‘tkazamiz va qayta yuboramiz
-                // Mijozni ro‘yxatdan o‘tkazamiz va qayta yuboramiz
                 $this->auth->initClient($dto);
                 $res = $this->sendWithAuthRetry($send);
             } else {
