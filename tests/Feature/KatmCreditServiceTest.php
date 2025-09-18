@@ -200,7 +200,6 @@ final class KatmCreditServiceTest extends TestCase
 
         $this->assertTrue($resp->success);
         $this->assertTrue($resp->data['activated'] ?? false);
-        $this->assertEquals('https://portal.infokredit.uz/ban', $resp->data['for_deactivation']['url'] ?? null);
 
         // Ketma-ketlik (odatiy holatda 5 chaqiriq bo‘ladi):
         // Auth(old) → Status(0, old) → Active(401, old) → Auth(new) → Active(200, new)
@@ -251,7 +250,6 @@ final class KatmCreditServiceTest extends TestCase
 
         $this->assertTrue($resp->success);
         $this->assertTrue($resp->data['activated'] ?? false);
-        $this->assertEquals('https://portal.infokredit.uz/ban', $resp->data['for_deactivation']['url'] ?? null);
 
         Http::assertSentCount(4);
         Http::assertSentInOrder([

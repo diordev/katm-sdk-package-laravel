@@ -88,12 +88,6 @@ final class KatmCreditService extends AbstractHttpClientService
             }
         }
 
-        // Qo‘shimcha ma’lumot (deaktivatsiya havolasi)
-        $res['data']['for_deactivation'] = [
-            'url' => 'https://portal.infokredit.uz/ban',
-            'apps' => 'KATM, MyGo',
-        ];
-
         return KatmResponseDto::from($res);
     }
 
